@@ -31,8 +31,11 @@ int main(int argc, char const *argv[]) {
   SimRes res = simulate(serie, sim_config);
   CERR_VAR(res.finish_rate_hi_prio);
   CERR_VAR(res.finish_rate_lo_prio);
+  CERR_VAR(res.finish_rate);
+  CERR_VAR(res.ave_tl_rate);
   CERR_VAR(res.elapsed_time);
   CERR_VAR(cal_needed_time(serie));
+  COUT_VAR(res.score);
 
   return 0;
 }
@@ -51,6 +54,7 @@ SimRes simulate(const TaskSerie &serie, const SimConfig &sim_config) {
   int missed_cnt_hi_prio = 0;
   int finish_cnt_lo_prio = 0;
   int missed_cnt_lo_prio = 0;
+  double sum_tl_rate = 0;
   double amplification = 0;
 
   int last_event_time = -1;
@@ -109,21 +113,24 @@ SimRes simulate(const TaskSerie &serie, const SimConfig &sim_config) {
 
         exposed_and_running_tasks.erase(task.taskId);
 
+        double tl_rate = 1.0 * (time - task.arrivalTime) / (task.deadline - task.arrivalTime);
+
         if (task.priority == TaskBase ::Priority::kHigh) {
           if (time <= task.deadline) {
             finish_cnt_hi_prio++;
           } else {
             missed_cnt_hi_prio++;
           }
+          sum_tl_rate += std::max(1.0, tl_rate) * 0.7;
         } else {
           if (time <= task.deadline) {
             finish_cnt_lo_prio++;
           } else {
             missed_cnt_lo_prio++;
           }
+          sum_tl_rate += std::max(1.0, tl_rate) * 0.3;
         }
-        amplification +=
-            1.0 * (time - task.arrivalTime) / (task.deadline - task.arrivalTime);
+        amplification += tl_rate;
 
       } else if (nearest.type == EventInternal::Type::kIoRequest) {
       } else if (nearest.type == EventInternal::Type::kIoEnd) {
@@ -173,10 +180,14 @@ SimRes simulate(const TaskSerie &serie, const SimConfig &sim_config) {
   }
 
   SimRes res;
+  double w = (0.7 * (finish_cnt_hi_prio + missed_cnt_hi_prio) + 0.3 * (finish_cnt_lo_prio + missed_cnt_lo_prio));
   res.finish_rate_hi_prio =
       1.0 * finish_cnt_hi_prio / (finish_cnt_hi_prio + missed_cnt_hi_prio);
   res.finish_rate_lo_prio =
       1.0 * finish_cnt_lo_prio / (finish_cnt_lo_prio + missed_cnt_lo_prio);
+  res.finish_rate = (0.7 * finish_cnt_hi_prio + 0.3 * finish_cnt_lo_prio) / w;
+  res.ave_tl_rate = sum_tl_rate / w;
+  res.score = (0.7 * finish_cnt_hi_prio + 0.3 * finish_cnt_lo_prio) / sum_tl_rate;
   res.elapsed_time = time;
   amplification /= all_tasks.size();
   CERR_VAR(amplification);

@@ -15,6 +15,9 @@ struct SimConfig {
 struct SimRes {
   double finish_rate_hi_prio;
   double finish_rate_lo_prio;
+  double finish_rate;
+  double ave_tl_rate;
+  double score;
   int elapsed_time;
 };
 
